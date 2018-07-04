@@ -685,7 +685,7 @@ class googleimagesdownload:
 
 
     # Getting all links with the help of '_images_get_next_image'
-    def _get_all_items(self,page,main_directory,dir_name,limit,arguments):
+    def _get_all_items(self,page,main_directory,dir_name,limit,arguments,get_urls_only=False):
         items = []
         abs_path = []
         errorCount = 0
@@ -705,20 +705,24 @@ class googleimagesdownload:
 
                 items.append(object)  # Append all the links in the list named 'Links'
 
-                #download the images
-                download_status,download_message,return_image_name,absolute_path = self.download_image(object['image_link'],object['image_format'],main_directory,dir_name,count,arguments['print_urls'],arguments['socket_timeout'],arguments['prefix'],arguments['print_size'],arguments['no_numbering'])
-                print(download_message)
-                if download_status == "success":
-
-                    # download image_thumbnails
-                    if arguments['thumbnail']:
-                        download_status, download_message_thumbnail = self.download_image_thumbnail(object['image_thumbnail_url'],main_directory,dir_name,return_image_name,arguments['print_urls'],arguments['socket_timeout'],arguments['print_size'])
-                        print(download_message_thumbnail)
-
+                if get_urls_only:
+                    abs_path.append(object['image_link'])
                     count += 1
-                    abs_path.append(absolute_path)
                 else:
-                    errorCount += 1
+                    #download the images
+                    download_status,download_message,return_image_name,absolute_path = self.download_image(object['image_link'],object['image_format'],main_directory,dir_name,count,arguments['print_urls'],arguments['socket_timeout'],arguments['prefix'],arguments['print_size'],arguments['no_numbering'])
+                    print(download_message)
+                    if download_status == "success":
+
+                        # download image_thumbnails
+                        if arguments['thumbnail']:
+                            download_status, download_message_thumbnail = self.download_image_thumbnail(object['image_thumbnail_url'],main_directory,dir_name,return_image_name,arguments['print_urls'],arguments['socket_timeout'],arguments['print_size'])
+                            print(download_message_thumbnail)
+
+                        count += 1
+                        abs_path.append(absolute_path)
+                    else:
+                        errorCount += 1
 
                 #delay param
                 if arguments['delay']:
@@ -734,7 +738,7 @@ class googleimagesdownload:
 
 
     # Bulk Download
-    def download(self,arguments):
+    def download(self,arguments,get_urls_only=False):
 
         #for input coming from other python files
         if __name__ != "__main__":
@@ -839,34 +843,38 @@ class googleimagesdownload:
                     else:
                         raw_html = self.download_extended_page(url,arguments['chromedriver'])
 
-                    print("Starting Download...")
-                    items,errorCount,abs_path = self._get_all_items(raw_html,main_directory,dir_name,limit,arguments)    #get all image items and download images
-                    paths[pky + search_keyword[i] + sky] = abs_path
+                    if get_urls_only:
+                        items,errorCount,img_url = self._get_all_items(raw_html,main_directory,dir_name,limit,arguments,get_urls_only=True)    #get all image items and urls
+                        paths[pky + search_keyword[i] + sky] = img_url
+                    else:
+                        print("Starting Download...")
+                        items,errorCount,abs_path = self._get_all_items(raw_html,main_directory,dir_name,limit,arguments)    #get all image items and download images
+                        paths[pky + search_keyword[i] + sky] = abs_path
 
-                    #dumps into a text file
-                    if arguments['extract_metadata']:
-                        try:
-                            if not os.path.exists("logs"):
-                                os.makedirs("logs")
-                        except OSError as e:
-                            print(e)
-                        text_file = open("logs/"+search_keyword[i]+".txt", "w")
-                        text_file.write(json.dumps(items, indent=4, sort_keys=True))
-                        text_file.close()
+                        #dumps into a text file
+                        if arguments['extract_metadata']:
+                            try:
+                                if not os.path.exists("logs"):
+                                    os.makedirs("logs")
+                            except OSError as e:
+                                print(e)
+                            text_file = open("logs/"+search_keyword[i]+".txt", "w")
+                            text_file.write(json.dumps(items, indent=4, sort_keys=True))
+                            text_file.close()
 
-                    #Related images
-                    if arguments['related_images']:
-                        print("\nGetting list of related keywords...this may take a few moments")
-                        tabs = self.get_all_tabs(raw_html)
-                        for key, value in tabs.items():
-                            final_search_term = (search_term + " - " + key)
-                            print("\nNow Downloading - " + final_search_term)
-                            if limit < 101:
-                                new_raw_html = self.download_page(value)  # download page
-                            else:
-                                new_raw_html = self.download_extended_page(value,arguments['chromedriver'])
-                            self.create_directories(main_directory, final_search_term,arguments['thumbnail'])
-                            self._get_all_items(new_raw_html, main_directory, search_term + " - " + key, limit,arguments)
+                        #Related images
+                        if arguments['related_images']:
+                            print("\nGetting list of related keywords...this may take a few moments")
+                            tabs = self.get_all_tabs(raw_html)
+                            for key, value in tabs.items():
+                                final_search_term = (search_term + " - " + key)
+                                print("\nNow Downloading - " + final_search_term)
+                                if limit < 101:
+                                    new_raw_html = self.download_page(value)  # download page
+                                else:
+                                    new_raw_html = self.download_extended_page(value,arguments['chromedriver'])
+                                self.create_directories(main_directory, final_search_term,arguments['thumbnail'])
+                                self._get_all_items(new_raw_html, main_directory, search_term + " - " + key, limit,arguments)
 
                     i += 1
                     print("\nErrors: " + str(errorCount) + "\n")
